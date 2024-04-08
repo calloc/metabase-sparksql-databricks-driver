@@ -5,7 +5,7 @@
 
   :dependencies
   [
-   [local/simba-spark-jdbc42 "2.6.22"]
+   [local/simba-spark-jdbc42 "2.6.36"]
   ]
 
   ;; only used for the lein with-drivers stuff (i.e. tests and REPL)
