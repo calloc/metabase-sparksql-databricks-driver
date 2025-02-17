@@ -141,6 +141,7 @@
           [col_name data_type]))
 
 ;; workaround for SPARK-9686 Spark Thrift server doesn't return correct JDBC metadata
+;; protect against duplicate column names by partitioning
 (defmethod driver/describe-table :sparksql-databricks
   [driver database {table-name :name, schema :schema}]
   {:name   table-name
@@ -152,13 +153,19 @@
                                                     (sql.u/quote-name driver :table
                                                                       (dash-to-underscore schema)
                                                                       (dash-to-underscore table-name)))])]
-       (set
-        (for [[idx {col-name :col_name, data-type :data_type, :as result}] (m/indexed results)
-              :when (valid-describe-table-row? result)]
-          {:name              col-name
-           :database-type     data-type
-           :base-type         (sql-jdbc.sync/database-type->base-type :hive-like (keyword data-type))
-           :database-position idx}))))})
+      (set
+       (reduce (fn [acc [idx {col-name :col_name, data-type :data_type, :as result}]]
+                 (if (valid-describe-table-row? result)
+                   (let [existing (some #(= col-name (:name %)) acc)]
+                     (if existing
+                       acc
+                       (conj acc {:name              col-name
+                                  :database-type     data-type
+                                  :base-type         (sql-jdbc.sync/database-type->base-type :hive-like (keyword data-type))
+                                  :database-position idx})))
+                   acc))
+               []
+               (m/indexed results)))))})
 
 ;; bound variables are not supported in Spark SQL (maybe not Hive either, haven't checked)
 (defmethod driver/execute-reducible-query :sparksql-databricks
